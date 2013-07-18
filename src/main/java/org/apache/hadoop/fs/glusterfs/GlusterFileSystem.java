@@ -27,23 +27,58 @@
  */
 package org.apache.hadoop.fs.glusterfs;
 
+import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
-import org.apache.hadoop.fs.LocalFileSystem;
+import org.apache.hadoop.fs.FilterFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-public class GlusterFileSystem extends LocalFileSystem{
+public class GlusterFileSystem extends FilterFileSystem{
     
     protected static final Logger log = LoggerFactory.getLogger(GlusterFileSystem.class);
-    
+    FileSystem rfs;
+    String swapScheme;
+    public FileSystem getRaw() {
+        return rfs;
+      }
+    public void initialize(URI name, Configuration conf) throws IOException {
+        if (fs.getConf() == null) {
+          fs.initialize(name, conf);
+        }
+        String scheme = name.getScheme();
+        if (!scheme.equals(fs.getUri().getScheme())) {
+          swapScheme = scheme;
+        }
+      }
+      public GlusterFileSystem(FileSystem rawLocalFileSystem) {
+        super(rawLocalFileSystem);
+        rfs = rawLocalFileSystem;
+      }
+      /** Convert a path to a File. */
+      public File pathToFile(Path path) {
+        return ((GlusterFileSystem)fs).pathToFile(path);
+      }
+      /**
+       * Get file status.
+       */
+      public boolean exists(Path f) throws IOException {
+        File path = pathToFile(f);
+        if (path.exists()) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+        
     public GlusterFileSystem(){
-        super(new GlusterVolume());
+        this(new GlusterVolume());
     }
     
     public void setConf(Configuration conf){
@@ -55,14 +90,13 @@ public class GlusterFileSystem extends LocalFileSystem{
      * if GlusterFileSystem is the default filesystem, real local URLs come back without a file:/ scheme name (BUG!). the glusterfs
      * file system is assumed.  force a schema. 
      */
-    @Override
+    
     public void copyFromLocalFile(boolean delSrc, Path src, Path dst)  throws IOException {
         FileSystem srcFs = new Path("file:/" + src.toString()).getFileSystem(getConf());
         FileSystem dstFs = dst.getFileSystem(getConf());
         FileUtil.copy(srcFs, src, dstFs, dst, delSrc, getConf());
     }
 
-    @Override
     public void copyToLocalFile(boolean delSrc, Path src, Path dst) throws IOException {
       FileSystem srcFs = src.getFileSystem(getConf());
       FileSystem dstFs = new Path("file:/" + dst.toString()).getFileSystem(getConf());
