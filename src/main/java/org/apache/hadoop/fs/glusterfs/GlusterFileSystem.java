@@ -63,7 +63,7 @@ public class GlusterFileSystem extends FilterFileSystem{
       }
       /** Convert a path to a File. */
       public File pathToFile(Path path) {
-        return ((GlusterFileSystem)fs).pathToFile(path);
+        return ((GlusterVolume)fs).pathToFile(path);
       }
       /**
        * Get file status.
