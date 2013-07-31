@@ -79,12 +79,17 @@ public class GlusterFileStatus extends FileStatus{
         }
         return super.getGroup();
     }
-
+    public static String[] getGET_PERMISSION_COMMAND() {
+        //force /bin/ls, except on windows.
+        return new String[] {(WINDOWS ? "ls" : "/bin/ls"), "-ld"};
+      }
+    public static final boolean WINDOWS /* borrowed from Path.WINDOWS */
+    = System.getProperty("os.name").startsWith("Windows");
     // / loads permissions, owner, and group from `ls -ld`
     private void loadPermissionInfo(){
         IOException e=null;
         try{
-            StringTokenizer t=new StringTokenizer(Util.execCommand(fs.pathToFile(getPath()), Shell.getGET_PERMISSION_COMMAND()));
+            StringTokenizer t=new StringTokenizer(Util.execCommand(fs.pathToFile(getPath()), getGET_PERMISSION_COMMAND()));
             // expected format
             // -rw------- 1 username groupname ...
             String permission=t.nextToken();
