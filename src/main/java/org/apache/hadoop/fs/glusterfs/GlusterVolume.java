@@ -34,6 +34,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.hadoop.fs.permission.FsPermission;
 
 public class GlusterVolume extends RawLocalFileSystem{
 
@@ -168,6 +169,24 @@ public class GlusterVolume extends RawLocalFileSystem{
 
         return result;
     }
+    
+    
+    public void setOwner(Path p, String username, String groupname)
+            throws IOException {
+    	File acl = Util.flushAcl(pathToFile(p));
+    	super.setOwner(p,username,groupname);
+    	Util.restoreAcl(acl);
+    	acl.delete();
+    }
+    
+    public void setPermission(Path p, FsPermission permission)
+            throws IOException {
+    	File acl = Util.flushAcl(pathToFile(p));
+    	super.setPermission(p,permission);
+    	Util.restoreAcl(acl);
+    	acl.delete();
+    }
+    
     
     public String toString(){
         return "Gluster Volume mounted at: " + root;

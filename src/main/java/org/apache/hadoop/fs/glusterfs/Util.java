@@ -23,14 +23,44 @@
 
 package org.apache.hadoop.fs.glusterfs;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
 
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.util.Shell;
 
 public class Util{
-
+	
+	public static File flushAcl(File p) throws IOException{
+		 String aclBackupCommand="getfacl -pPdEsR ";
+	     File tempFile = File.createTempFile("glusterfsACL-" + System.currentTimeMillis() , ".tmp", new File(System.getProperty("java.io.tmpdir")));
+	     String command = aclBackupCommand + p.getAbsolutePath() + " >"+ tempFile.getAbsoluteFile();
+	     Process proc = Runtime.getRuntime().exec(command);
+	     BufferedReader brInput=new BufferedReader(new InputStreamReader(proc.getInputStream()));
+	     FileWriter fw = new FileWriter(tempFile);
+	     BufferedWriter bw = new BufferedWriter(fw);
+		 String s;
+	            
+	     while ((s=brInput.readLine())!=null){
+	    	 bw.write(s + System.getProperty("line.separator"));
+	     }
+	     
+	     bw.close();
+	     
+	     return tempFile;
+	                  
+	}
+	
+	public static void restoreAcl(File p) throws IOException{
+		String aclRestoreCommand="setfacl --restore=";
+		String command = aclRestoreCommand + p.getAbsolutePath();
+       Runtime.getRuntime().exec(command);
+	}
+	
     public static String execCommand(File f,String...cmd) throws IOException{
         String[] args=new String[cmd.length+1];
         System.arraycopy(cmd, 0, args, 0, cmd.length);
