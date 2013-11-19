@@ -35,14 +35,25 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.hadoop.fs.permission.FsPermission;
 
 public class GlusterVolume extends RawLocalFileSystem{
 
+    static final Logger log = LoggerFactory.getLogger(GlusterVolume.class);
 
-    static final Logger log = LoggerFactory.getLogger(GlusterFileSystemCRC.class);
+    /**
+     * General reason for these constants is to help us decide
+     * when to override the specified buffer size.  See implementation 
+     * of logic below, which might change overtime.
+     */
+    public static final int OVERRIDE_WRITE_BUFFER_SIZE = 1024 * 4;
+    public static final int OPTIMAL_WRITE_BUFFER_SIZE = 1024 * 128;
+    
     public static final URI NAME = URI.create("glusterfs:///");
     
     protected String root=null;
+    protected String superUser=null;
+    protected AclPathFilter aclFilter = null;
     
     protected static GlusterFSXattr attr = null;
     
@@ -81,14 +92,25 @@ public class GlusterVolume extends RawLocalFileSystem{
                     mkdirs(mapredSysDirectory);
                 }
                 
-                /* ensure the initial working directory exists */
+                /**
+                 *  Ensure the initial working directory exists 
+                 **/
+                superUser =  conf.get("gluster.daemon.user", null);
+                aclFilter = new AclPathFilter(conf);
+                
                 Path workingDirectory = getInitialWorkingDirectory();
                 mkdirs(workingDirectory);
-                
-                //volName=conf.get("fs.glusterfs.volname", null);
-                //remoteGFSServer=conf.get("fs.glusterfs.server", null);
-                
-            }catch (Exception e){
+
+                /**
+                 * Write Buffering
+                 */
+                Integer userBufferSize=conf.getInt("io.file.buffer.size", -1);
+                if(userBufferSize == OVERRIDE_WRITE_BUFFER_SIZE || userBufferSize == -1) {
+                	conf.setInt("io.file.buffer.size", OPTIMAL_WRITE_BUFFER_SIZE);
+                }
+                log.info("Write buffer size : " +conf.getInt("io.file.buffer.size",-1)) ;
+            }
+            catch (Exception e){
                 throw new RuntimeException(e);
             }
         }
@@ -104,7 +126,7 @@ public class GlusterVolume extends RawLocalFileSystem{
     }
   
     @Override
-	protected Path getInitialWorkingDirectory() {
+    protected Path getInitialWorkingDirectory() {
 		/* apache's unit tests use a default working direcotry like this: */
        return new Path(this.NAME + "user/" + System.getProperty("user.name"));
         /* The super impl returns the users home directory in unix */
@@ -113,9 +135,9 @@ public class GlusterVolume extends RawLocalFileSystem{
 
 	public Path fileToPath(File path) {
         return new Path(NAME.toString() + path.toURI().getRawPath().substring(root.length()));
-    }
+     }
 
-	public boolean rename(Path src, Path dst) throws IOException {
+     public boolean rename(Path src, Path dst) throws IOException {
 		File dest = pathToFile(dst);
 		
 		/* two HCFS semantics java.io.File doesn't honor */
@@ -200,7 +222,36 @@ public class GlusterVolume extends RawLocalFileSystem{
 
         return blkSz;
     }
-   
+    /*
+     * ensures the 'super user' is given read/write access.  
+     * the ACL drops off after a chmod or chown.
+     */
+    
+    private void updateAcl(Path p){
+    	if(superUser!=null && aclFilter.matches(p)  ){
+    		File f = pathToFile(p);
+    		String path = f.getAbsolutePath();
+    		String command = "setfacl -m u:" + superUser + ":rwx " + path;
+    		try{
+    			Runtime.getRuntime().exec(command);
+    		}catch(IOException ex){
+    			throw new RuntimeException(ex);
+    		}
+    	}
+    }
+    
+    public void setOwner(Path p, String username, String groupname)
+            throws IOException {
+    	super.setOwner(p,username,groupname);
+    	updateAcl(p);
+    	
+    }
+    
+    public void setPermission(Path p, FsPermission permission)
+            throws IOException {
+    	super.setPermission(p,permission);
+    	updateAcl(p);
+    }
     public BlockLocation[] getFileBlockLocations(FileStatus file,long start,long len) throws IOException{
         File f=pathToFile(file.getPath());
         BlockLocation[] result=null;
