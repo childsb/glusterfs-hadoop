@@ -42,9 +42,11 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FSError;
 import org.apache.hadoop.fs.FSInputStream;
+import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
+import org.apache.hadoop.fs.FsStatus;
 import org.apache.hadoop.fs.HasFileDescriptor;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RawLocalFileSystem;
@@ -324,18 +326,17 @@ public class GlusterVol extends FileSystem {
 
 	@Override
 	public FileStatus[] listStatus(Path f) throws IOException {
-		File localf = pathToFile(f);
+		GlusterFile localf = vol.open(pathOnly(f));
 		FileStatus[] results;
 
 		if (!localf.exists()) {
 			throw new FileNotFoundException("File " + f + " does not exist");
 		}
 		if (localf.isFile()) {
-			return new FileStatus[] { new RawLocalFileStatus(localf,
-					getDefaultBlockSize(f), this) };
+			return new FileStatus[] { new GlusterFileStatus(localf) };
 		}
 
-		File[] names = localf.listFiles();
+		GlusterFile[] names = localf.listFiles();
 		if (names == null) {
 			return null;
 		}
@@ -343,7 +344,7 @@ public class GlusterVol extends FileSystem {
 		int j = 0;
 		for (int i = 0; i < names.length; i++) {
 			try {
-				results[j] = getFileStatus(new Path(names[i].getAbsolutePath()));
+				results[j] = getFileStatus(new Path(names[i].getPath()));
 				j++;
 			} catch (FileNotFoundException e) {
 				// ignore the files not found since the dir list may have have
@@ -367,9 +368,9 @@ public class GlusterVol extends FileSystem {
 			throw new IllegalArgumentException("mkdirs path arg is null");
 		}
 		Path parent = f.getParent();
-		File p2f = pathToFile(f);
+		GlusterFile p2f =vol.open(pathOnly(f));
 		if (parent != null) {
-			File parent2f = pathToFile(parent);
+			GlusterFile parent2f = vol.open(pathOnly(parent));
 			if (parent2f != null && parent2f.exists()
 					&& !parent2f.isDirectory()) {
 				throw new FileAlreadyExistsException(
@@ -424,12 +425,11 @@ public class GlusterVol extends FileSystem {
 
 	@Override
 	public FsStatus getStatus(Path p) throws IOException {
-		File partition = pathToFile(p == null ? new Path("/") : p);
+		// assume for now that we're only dealing with one volume.
+		//GlusterFile partition = vol.open(pathOnly(p == null ? new Path("/") : p));
 		// File provides getUsableSpace() and getFreeSpace()
 		// File provides no API to obtain used space, assume used = total - free
-		return new FsStatus(partition.getTotalSpace(),
-				partition.getTotalSpace() - partition.getFreeSpace(),
-				partition.getFreeSpace());
+		return new GlusterFsStatus(vol);
 	}
 
 	// In the case of the local filesystem, we can just rename the file.
@@ -458,146 +458,42 @@ public class GlusterVol extends FileSystem {
 
 	@Override
 	public String toString() {
-		return "LocalFS";
+		return "GlusterFs Volume:" + vol.getName();
 	}
 
 	@Override
 	public FileStatus getFileStatus(Path f) throws IOException {
-		File path = pathToFile(f);
-		if (path.exists()) {
-			return new RawLocalFileStatus(pathToFile(f),
-					getDefaultBlockSize(f), this);
-		} else {
-			throw new FileNotFoundException("File " + f + " does not exist");
-		}
+		return new GlusterFileStatus(vol.open(pathOnly(f)));
+		
 	}
 
-	static class RawLocalFileStatus extends FileStatus {
-		/*
-		 * We can add extra fields here. It breaks at least
-		 * CopyFiles.FilePair(). We recognize if the information is already
-		 * loaded by check if onwer.equals("").
-		 */
-		private boolean isPermissionLoaded() {
-			return !super.getOwner().equals("");
-		}
-
-		RawLocalFileStatus(File f, long defaultBlockSize, FileSystem fs) {
-			super(f.length(), f.isDirectory(), 1, defaultBlockSize, f
-					.lastModified(), fs.makeQualified(new Path(f.getPath())));
-		}
-
-		@Override
-		public FsPermission getPermission() {
-			if (!isPermissionLoaded()) {
-				loadPermissionInfo();
-			}
-			return super.getPermission();
-		}
-
-		@Override
-		public String getOwner() {
-			if (!isPermissionLoaded()) {
-				loadPermissionInfo();
-			}
-			return super.getOwner();
-		}
-
-		@Override
-		public String getGroup() {
-			if (!isPermissionLoaded()) {
-				loadPermissionInfo();
-			}
-			return super.getGroup();
-		}
-
-		// / loads permissions, owner, and group from `ls -ld`
-		private void loadPermissionInfo() {
-			IOException e = null;
-			try {
-				StringTokenizer t = new StringTokenizer(execCommand(new File(
-						getPath().toUri()), Shell.getGET_PERMISSION_COMMAND()));
-				// expected format
-				// -rw------- 1 username groupname ...
-				String permission = t.nextToken();
-				if (permission.length() > 10) { // files with ACLs might have a
-												// '+'
-					permission = permission.substring(0, 10);
-				}
-				setPermission(FsPermission.valueOf(permission));
-				t.nextToken();
-				setOwner(t.nextToken());
-				setGroup(t.nextToken());
-			} catch (Shell.ExitCodeException ioe) {
-				if (ioe.getExitCode() != 1) {
-					e = ioe;
-				} else {
-					setPermission(null);
-					setOwner(null);
-					setGroup(null);
-				}
-			} catch (IOException ioe) {
-				e = ioe;
-			} finally {
-				if (e != null) {
-					throw new RuntimeException(
-							"Error while running command to get "
-									+ "file permissions : "
-									+ StringUtils.stringifyException(e));
-				}
-			}
-		}
-
-		@Override
-		public void write(DataOutput out) throws IOException {
-			if (!isPermissionLoaded()) {
-				loadPermissionInfo();
-			}
-			super.write(out);
-		}
-	}
-
-	/**
-	 * Use the command chown to set owner.
-	 */
 	@Override
-	public void setOwner(Path p, String username, String groupname)
-			throws IOException {
+	public void setOwner(Path p, String username, String groupname)	throws IOException {
 		if (username == null && groupname == null) {
 			throw new IOException("username == null && groupname == null");
 		}
-
+		GlusterFile gf = vol.open(pathOnly(p));
+		long gid = -1;
+		long uid = -1;
+		
 		if (username == null) {
-			execCommand(pathToFile(p), Shell.SET_GROUP_COMMAND, groupname);
-		} else {
-			// OWNER[:[GROUP]]
-			String s = username + (groupname == null ? "" : ":" + groupname);
-			execCommand(pathToFile(p), Shell.SET_OWNER_COMMAND, s);
+			uid = gf.getUid();
 		}
+		
+		if(groupname==null){
+			gid = gf.getGid();
+		}
+		
+		gf.chown(uid, gid);
+	
 	}
 
-	/**
-	 * Use the command chmod to set permission.
-	 */
 	@Override
-	public void setPermission(Path p, FsPermission permission)
-			throws IOException {
-		if (NativeIO.isAvailable()) {
-			NativeIO.chmod(pathToFile(p).getCanonicalPath(),
-					permission.toShort());
-		} else {
-			execCommand(pathToFile(p), Shell.SET_PERMISSION_COMMAND,
-					String.format("%05o", permission.toShort()));
-		}
+	public void setPermission(Path p, FsPermission permission) throws IOException {
+		GlusterFile gf = vol.open(pathOnly(p));
+		gf.chmod(permission.toShort());
 	}
 
-	private static String execCommand(File f, String... cmd) throws IOException {
-		String[] args = new String[cmd.length + 1];
-		System.arraycopy(cmd, 0, args, 0, cmd.length);
-		args[cmd.length] = FileUtil.makeShellPath(f, true);
-		String output = Shell.execCommand(args);
-		return output;
-	}
 
 
 }

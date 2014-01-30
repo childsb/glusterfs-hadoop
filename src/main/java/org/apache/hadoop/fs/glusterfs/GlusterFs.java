@@ -27,7 +27,7 @@
  * 
  */
 
-package org.apache.hadoop.fs.local;
+package org.apache.hadoop.fs.glusterfs;
 
 import java.io.IOException;
 import java.net.URI;
@@ -35,6 +35,7 @@ import java.net.URISyntaxException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FilterFs;
+import org.apache.hadoop.fs.local.GlusterVol;
 
 public class GlusterFs extends FilterFs{
 
