@@ -45,28 +45,20 @@ public class GlusterFileSystem extends FilterFileSystem{
     protected static final Logger log=LoggerFactory.getLogger(GlusterFileSystem.class);
    
     public GlusterFileSystem(){
-        super(new GlusterVolume());
+        super(new GlusterfsVolume());
         Version v=new Version();
         log.info("Initializing GlusterFS,  CRC disabled.");
         log.info("GIT INFO="+v);
         log.info("GIT_TAG="+v.getTag());
     }
 
-    /** Convert a path to a File. */
-    public File pathToFile(Path path){
-        return ((GlusterVolume) fs).pathToFile(path);
-    }
-
     /**
      * Get file status.
      */
     public boolean exists(Path f) throws IOException{
-        File path=pathToFile(f);
-        if(path.exists()){
-            return true;
-        }else{
-            return false;
-        }
+    	   FileSystem dstFs=f.getFileSystem(getConf());
+    	   return dstFs.exists(f);
+       
     }
 
     public void setConf(Configuration conf){

@@ -35,13 +35,13 @@ import java.net.URISyntaxException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FilterFs;
-import org.apache.hadoop.fs.local.GlusterVol;
 
 public class GlusterFs extends FilterFs{
 
     GlusterFs(Configuration conf) throws IOException, URISyntaxException{
         super(new GlusterVol(conf));
     }
+    
 
     GlusterFs(final URI theUri, final Configuration conf) throws IOException, URISyntaxException{
         this(conf);
