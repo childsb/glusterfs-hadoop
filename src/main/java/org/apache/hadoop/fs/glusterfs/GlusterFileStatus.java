@@ -29,27 +29,95 @@ import java.io.IOException;
 import java.util.StringTokenizer;
 
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.util.StringUtils;
-import org.gluster.fs.GlusterFile;
 /*
  * Copied from org.apache.fs.RawLocalFileSystem.RawFileStatus
  */
 public class GlusterFileStatus extends FileStatus{
-	public GlusterFileStatus(GlusterFile file) { 
-		  super(file.length(),
-				file.isDirectory(),
-				0, // repliation count
-				file.getBlockSize(),
-				file.getMtime(),
-				file.getAtime(),
-				new FsPermission(new Long(file.getMod()).shortValue()),
-				IdLookup.getName(new Long(file.getUid()).intValue()),
-				IdLookup.getName(new Long(file.getGid()).intValue()),
-				null, // path to link 
-				new Path(file.getPath()));
-		  
-	  }
+    /*
+     * We can add extra fields here. It breaks at least CopyFiles.FilePair(). We
+     * recognize if the information is already loaded by check if
+     * onwer.equals("").
+     */
+    protected GlusterVolume fs;
+
+    private boolean isPermissionLoaded(){
+        return !super.getOwner().equals("");
+    }
+
+    
+    /*
+     * This constructor is the only difference than the RawLocalFileStatus impl. RawLocalFileSystem converts a raw file path to path with the same prefix. ends up with a double /mnt/glusterfs.
+     */
+    GlusterFileStatus(File f, long defaultBlockSize, GlusterVolume fs){
+        super(f.length(), f.isDirectory(), 1, defaultBlockSize, f.lastModified(), fs.fileToPath(f));
+        this.fs=fs;
+    }
+
+    @Override
+    public FsPermission getPermission(){
+        if(!isPermissionLoaded()){
+            loadPermissionInfo();
+        }
+        return super.getPermission();
+    }
+
+    @Override
+    public String getOwner(){
+        if(!isPermissionLoaded()){
+            loadPermissionInfo();
+        }
+        return super.getOwner();
+    }
+
+    @Override
+    public String getGroup(){
+        if(!isPermissionLoaded()){
+            loadPermissionInfo();
+        }
+        return super.getGroup();
+    }
+
+    // / loads permissions, owner, and group from `ls -ld`
+    private void loadPermissionInfo(){
+        IOException e=null;
+        try{
+            StringTokenizer t=new StringTokenizer(Util.execCommand(fs.pathToFile(getPath()), Util.getGET_PERMISSION_COMMAND()));
+            // expected format
+            // -rw------- 1 username groupname ...
+            String permission=t.nextToken();
+            if(permission.length()>10){ // files with ACLs might have a '+'
+                permission=permission.substring(0, 10);
+            }
+            setPermission(FsPermission.valueOf(permission));
+            t.nextToken();
+            setOwner(t.nextToken());
+            setGroup(t.nextToken());
+        }catch (Shell.ExitCodeException ioe){
+            if(ioe.getExitCode()!=1){
+                e=ioe;
+            }else{
+                setPermission(null);
+                setOwner(null);
+                setGroup(null);
+            }
+        }catch (IOException ioe){
+            e=ioe;
+        }finally{
+            if(e!=null){
+                throw new RuntimeException("Error while running command to get "+"file permissions : "+StringUtils.stringifyException(e));
+            }
+        }
+    }
+
+    @Override
+    public void write(DataOutput out) throws IOException{
+        if(!isPermissionLoaded()){
+            loadPermissionInfo();
+        }
+        super.write(out);
+    }
+
 }

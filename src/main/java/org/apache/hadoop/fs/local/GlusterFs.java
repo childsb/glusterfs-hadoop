@@ -27,7 +27,7 @@
  * 
  */
 
-package org.apache.hadoop.fs.glusterfs;
+package org.apache.hadoop.fs.local;
 
 import java.io.IOException;
 import java.net.URI;
@@ -41,7 +41,6 @@ public class GlusterFs extends FilterFs{
     GlusterFs(Configuration conf) throws IOException, URISyntaxException{
         super(new GlusterVol(conf));
     }
-    
 
     GlusterFs(final URI theUri, final Configuration conf) throws IOException, URISyntaxException{
         this(conf);

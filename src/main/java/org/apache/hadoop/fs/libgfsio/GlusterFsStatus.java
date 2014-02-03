@@ -1,4 +1,4 @@
-package org.apache.hadoop.fs.glusterfs;
+package org.apache.hadoop.fs.libgfsio;
 
 import org.apache.hadoop.fs.FsStatus;
 import org.gluster.fs.GlusterVolume;

@@ -1,8 +1,12 @@
-package org.apache.hadoop.fs.glusterfs;
+package org.apache.hadoop.fs.libgfsio;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 
 import java.io.InputStream;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class IdLookup {
 	
@@ -58,25 +62,35 @@ public class IdLookup {
 	}
 	
 	public static String getName(int id){
-		 String command = "getent passwd | awk -F: '$3 == " + id + " { print $1 }'";
+		 String command = "getent passwd";
 		 Process child=null;
+		 String s=null;
 		try {
 			child = Runtime.getRuntime().exec(command);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		InputStream in = child.getInputStream();
-		String output = new String();
-		int c;
-		try{
-		while ((c = in.read()) != -1) {
-		    output+=c;
+		BufferedReader brInput=new BufferedReader(new InputStreamReader(child.getInputStream()));
+
+	     String   cmdOut="";
+	        try {
+				while ((s=brInput.readLine())!=null)
+				    cmdOut+=s;
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+	    String pattern = "^(\\w*)\\:\\w*\\:" + id+":";
+	    Matcher results = Pattern.compile(pattern).matcher(cmdOut);
+		String name = null;
+	    try{
+			results.find();
+	    	name =  results.group(1);
+		}catch(IllegalStateException ex){
+			// user not found
 		}
-		in.close();
-		}catch(IOException ex){
-			
-		}
-		return output;
+		
+	    return name;
 		
 	}
 

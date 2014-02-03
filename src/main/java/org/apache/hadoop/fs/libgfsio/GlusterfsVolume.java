@@ -19,7 +19,7 @@
  * 
  */
 
-package org.apache.hadoop.fs.glusterfs;
+package org.apache.hadoop.fs.libgfsio;
 
 import java.io.BufferedOutputStream;
 import java.io.FileNotFoundException;
@@ -43,6 +43,7 @@ import org.apache.hadoop.fs.FsStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.util.Progressable;
+import org.gluster.fs.GlusterClient;
 import org.gluster.fs.GlusterFile;
 import org.gluster.fs.GlusterInputStream;
 import org.gluster.fs.GlusterOutputStream;
@@ -60,6 +61,7 @@ public class GlusterfsVolume extends FileSystem {
 	}
 	
 	public GlusterVolume vol;
+	public GlusterClient client;
 
 	private Path makeAbsolute(Path f) {
 		if (f.isAbsolute()) {
@@ -73,6 +75,35 @@ public class GlusterfsVolume extends FileSystem {
 		return NAME;
 	}
 
+	public void setConf(Configuration conf){
+		
+		if(conf==null) return;
+		
+		super.setConf(conf);
+		
+		String volume = conf.get("fs.glusterfs.volume", "gv0");
+		String server = conf.get("fs.glusterfs.server", "localhost");
+		
+		client = new GlusterClient(server);
+		
+		try {
+			vol = client.connect(volume);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		Path workingDirectory = getInitialWorkingDirectory();
+        try {
+			mkdirs(workingDirectory);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+        setWorkingDirectory(workingDirectory);
+        System.out.println("Working directory is : "+ getWorkingDirectory());
+        
+	}
+	
 	public String pathOnly(Path path){
 		return path.toUri().getPath();
 	}
@@ -412,7 +443,7 @@ public class GlusterfsVolume extends FileSystem {
 
 	@Override
 	protected Path getInitialWorkingDirectory() {
-		return this.makeQualified(new Path(System.getProperty("user.dir")));
+		return new Path(this.NAME + "user/" + System.getProperty("user.name"));
 	}
 
 	@Override
@@ -455,8 +486,12 @@ public class GlusterfsVolume extends FileSystem {
 
 	@Override
 	public FileStatus getFileStatus(Path f) throws IOException {
-		return new GlusterFileStatus(vol.open(pathOnly(f)));
+		GlusterFile file = vol.open(pathOnly(f));
 		
+		if(file.exists())
+			return new GlusterFileStatus(vol.open(pathOnly(f)));
+		
+		return null;
 	}
 
 	@Override
