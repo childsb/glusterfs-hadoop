@@ -23,13 +23,65 @@
 
 package org.apache.hadoop.fs.glusterfs;
 
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.util.Shell;
 
 public class Util{
+	 private static File logFile=null;
+	    private static final String LOG_PREFIX="/tmp/glusterfs";
+	    private static boolean showStackTrace = true;
+	    
+	    public static synchronized String getStackTrace(int stripTopElements){
+	        StackTraceElement[] trace = Thread.currentThread().getStackTrace();
+	        String traceString = "";
+	        // remove the specified top elements of the stack trace (to avoid debug methods in the trace). the +1 is for this methods call.
+	        for(int i=stripTopElements+1;i<trace.length;i++){
+	            traceString += "\t[" + trace[i].getFileName() + "] " +  trace[i].getClassName() +  "." + trace[i].getMethodName() +  "() line:" + trace[i].getLineNumber() + "\n";
+	        }
+	        
+	        return traceString;
+	    }
+	    
+	    public static synchronized void logMachine(String text){
+
+	        DateFormat dateFormat=new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+	        Date date=new Date();
+	        if(logFile==null){
+	            for(int i=0;i<1000000;i++){
+	                logFile=new File(LOG_PREFIX+"-"+i+".log");
+	                if(!logFile.exists()){
+	                    try{
+	                        logFile.createNewFile();
+	                        break;
+	                    }catch (IOException e){
+	                    }
+	                }
+	            }
+	        }
+
+	        try{
+	            PrintWriter out=new PrintWriter(new BufferedWriter(new FileWriter(logFile, true)));
+	            out.write("(" + dateFormat.format(date)+") : "+text+"\n");
+	            String stackTrace = Util.getStackTrace(3);
+	            if(showStackTrace) out.write(stackTrace);
+	            out.close();
+	        }catch (FileNotFoundException e){
+	            e.printStackTrace();
+	        }catch (IOException e){
+	            e.printStackTrace();
+	        }
+
+	    }
 
     public static String execCommand(File f,String...cmd) throws IOException{
         String[] args=new String[cmd.length+1];

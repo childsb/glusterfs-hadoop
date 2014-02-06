@@ -117,6 +117,7 @@ public class GlusterfsVolume extends FileSystem {
 	class TrackingInputStreamWrapper extends InputStream {
 		
 		GlusterInputStream ios = null;
+		long bytesRead = 0;
 		
 		public TrackingInputStreamWrapper(GlusterInputStream ios) throws IOException {
 			this.ios = ios;
@@ -128,6 +129,8 @@ public class GlusterfsVolume extends FileSystem {
 		
 		public int read() throws IOException {
 			int result = ios.read();
+			bytesRead+=result;
+			//System.out.println("2Read bytes:" + bytesRead + " current offset " + ios.offset());
 			if (result != -1) {
 				statistics.incrementBytesRead(1);
 			}
@@ -136,6 +139,8 @@ public class GlusterfsVolume extends FileSystem {
 
 		public int read(byte[] data) throws IOException {
 			int result = ios.read(data);
+			bytesRead+=result;
+			//System.out.println("2Read bytes:" + bytesRead + " current offset " + ios.offset());
 			if (result != -1) {
 				statistics.incrementBytesRead(result);
 			}
@@ -145,6 +150,8 @@ public class GlusterfsVolume extends FileSystem {
 		@Override
 		public int read(byte[] data, int offset, int length) throws IOException {
 			int result = ios.read(data, offset, length);
+			bytesRead+=result;
+			//System.out.println("2Read bytes:" + bytesRead + " current offset " + ios.offset());
 			if (result != -1) {
 				statistics.incrementBytesRead(result);
 			}
@@ -157,9 +164,12 @@ public class GlusterfsVolume extends FileSystem {
 	 *******************************************************/
 	class GlussterFileInputStream extends FSInputStream  {
 		private TrackingInputStreamWrapper fis;
-	
+		private long bytesReadThisStream = 0;
+		private String fileName = null;
+		
 		public GlussterFileInputStream(Path f) throws IOException {
 			GlusterInputStream gis = vol.open(pathOnly(f)).inputStream();
+			fileName = f.toString();
 			this.fis = new TrackingInputStreamWrapper(gis);
 		}
 
@@ -197,17 +207,25 @@ public class GlusterfsVolume extends FileSystem {
 
 		@Override
 		public int read() throws IOException {
-				return fis.read();
+			bytesReadThisStream++;	
+		//	 System.out.println("Read " + fileName + " newoffset:" +  fis.getChannel().offset() + " total read:" + bytesReadThisStream/1024);
+			return fis.read();
 		}
 
 		@Override
 		public int read(byte[] b, int off, int len) throws IOException {
-				return fis.read(b, off, len);
+				int read =  fis.read(b, off, len);
+				bytesReadThisStream+=read;
+			//	 System.out.println("Read " + fileName + " newoffset:" +  fis.getChannel().offset() + " total read:" + bytesReadThisStream/1024);
+				return read;
 		}
 
 		@Override
 		public int read(long position, byte[] b, int off, int len) throws IOException {
-		     return fis.getChannel().read(b, off, len);
+			 
+			  int read = fis.getChannel().read(b, off, len);
+			//  System.out.println("Read " + fileName + " newoffset:" +  fis.getChannel().offset() + " total read:" + bytesReadThisStream/1024);
+			  return read;
 		}
 
 		@Override
@@ -249,11 +267,13 @@ public class GlusterfsVolume extends FileSystem {
 
 		@Override
 		public void write(byte[] b, int off, int len) throws IOException {
+			//System.out.println("write(byte,off,len): " + len);
 			fos.write(b, off, len);
 		}
 
 		@Override
 		public void write(int b) throws IOException {
+		//	System.out.println("write(): ");
 				fos.write(b);
 		}
 	}
@@ -356,7 +376,7 @@ public class GlusterfsVolume extends FileSystem {
 			throw new FileNotFoundException("File " + f + " does not exist");
 		}
 		if (localf.isFile()) {
-			return new FileStatus[] { new GlusterFileStatus(localf) };
+			return new FileStatus[] { new GlusterFileStatus(localf,this) };
 		}
 
 		GlusterFile[] names = localf.listFiles();
@@ -488,10 +508,11 @@ public class GlusterfsVolume extends FileSystem {
 	public FileStatus getFileStatus(Path f) throws IOException {
 		GlusterFile file = vol.open(pathOnly(f));
 		
-		if(file.exists())
-			return new GlusterFileStatus(vol.open(pathOnly(f)));
-		
-		return null;
+		if(file.exists()){
+			return new GlusterFileStatus(vol.open(pathOnly(f)),this);
+	    }else {
+		    throw new FileNotFoundException( "File " + f + " does not exist.");
+		}
 	}
 
 	@Override

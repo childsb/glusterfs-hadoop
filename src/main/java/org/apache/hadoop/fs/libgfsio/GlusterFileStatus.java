@@ -38,7 +38,10 @@ import org.gluster.fs.GlusterFile;
  * Copied from org.apache.fs.RawLocalFileSystem.RawFileStatus
  */
 public class GlusterFileStatus extends FileStatus{
-	public GlusterFileStatus(GlusterFile file) { 
+	
+
+	
+	public GlusterFileStatus(GlusterFile file, GlusterfsVolume vol) { 
 		  super(file.length(),
 				file.isDirectory(),
 				0, // repliation count
@@ -49,7 +52,7 @@ public class GlusterFileStatus extends FileStatus{
 				IdLookup.getName(new Long(file.getUid()).intValue()),
 				IdLookup.getName(new Long(file.getGid()).intValue()),
 				null, // path to link 
-				new Path(file.getPath()));
+				vol.makeQualified(new Path(file.getPath())));
 		  
 	  }
 }

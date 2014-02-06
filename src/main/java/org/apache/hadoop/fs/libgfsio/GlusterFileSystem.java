@@ -57,26 +57,9 @@ public class GlusterFileSystem extends FilterFileSystem{
      * Get file status.
      */
     public boolean exists(Path f) throws IOException{
-    	   
     	   return getRawFileSystem().exists(f);
-       
     }
-    public Path makeQualified(Path path) {
-        Path fqPath = fs.makeQualified(path);
-        // swap in our scheme if the filtered fs is using a different scheme
-        if (swapScheme != null) {
-          try {
-            // NOTE: should deal with authority, but too much other stuff is broken 
-            fqPath = new Path(
-                new URI(swapScheme, fqPath.toUri().getSchemeSpecificPart(), null)
-            );
-          } catch (URISyntaxException e) {
-            throw new IllegalArgumentException(e);
-          }
-        }
-        return fqPath;
-      }
-    
+
     public void setConf(Configuration conf){
         log.info("Configuring GlusterFS");
         super.setConf(conf);

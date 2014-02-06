@@ -29,6 +29,7 @@ import java.util.Arrays;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
+import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
@@ -208,7 +209,35 @@ public class GlusterVolume extends RawLocalFileSystem{
         }
         return Arrays.copyOf(results, j);
     }
+    public boolean mkdirs(Path f) throws IOException {
     
+        if(f == null) {
+          throw new IllegalArgumentException("mkdirs path arg is null");
+        }
+    	Util.logMachine("MKDIRS(" + f.toString() + ")" );
+        Path parent = f.getParent();
+        File p2f = pathToFile(f);
+        if(parent != null) {
+          File parent2f = pathToFile(parent);
+          if(parent2f != null && parent2f.exists() && !parent2f.isDirectory()) {
+            throw new FileAlreadyExistsException("Parent path is not a directory: " 
+                + parent);
+          }
+        }
+        return (parent == null || mkdirs(parent)) &&
+          (p2f.mkdir() || p2f.isDirectory());
+      }
+
+      @Override
+      public boolean mkdirs(Path f, FsPermission permission) throws IOException {
+    		Util.logMachine("MKDIRS(" + f.toString() + ")" );
+        boolean b = mkdirs(f);
+        if(b) {
+          setPermission(f, permission);
+        }
+        return b;
+      }
+      
     public FileStatus getFileStatus(Path f) throws IOException {
         File path = pathToFile(f);
         if (path.exists()) {
