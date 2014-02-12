@@ -261,8 +261,13 @@ public class GlusterVolume extends RawLocalFileSystem{
     public BlockLocation[] getFileBlockLocations(FileStatus file,long start,long len) throws IOException{
         File f=pathToFile(file.getPath());
         BlockLocation[] result=null;
-
-        result=attr.getPathInfo(f.getPath(), start, len);
+        try{
+            result=attr.getPathInfo(f.getPath(), start, len);
+        }catch(IOException ex){
+            log.error("Error while retrieving block locations for file: " + f.getPath() + "\nException:"+ ex);
+            return new BlockLocation[0];
+        }
+        
         if(result==null){
             log.info("Problem getting destination host for file "+f.getPath());
             return null;

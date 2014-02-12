@@ -222,7 +222,7 @@ public class GlusterFSXattr{
         }
 
         if((dcount==0)&&(scount==0)&&(rcount==0))
-            throw new IOException("Cannot get layout");
+            throw new IOException("Cannot get 'layout' wile parsing xattr command: " + getfattrCmd + "\nCommand output:\n" + cmdOut);
 
         if(meta!=null){
             meta.put("dcount", dcount);
