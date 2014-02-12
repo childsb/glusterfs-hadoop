@@ -4,7 +4,7 @@
 rm -rf target/
 export GLUSTER_MOUNT=/mnt/glusterfs
 export HCFS_FILE_SYSTEM_CONNECTOR=org.apache.hadoop.fs.test.connector.glusterfs.GlusterFileSystemTestConnector
-export HCFS_CLASSNAME=org.apache.hadoop.fs.ilibgfsio.GlusterFileSystem
+export HCFS_CLASSNAME=org.apache.hadoop.fs.libgfsio.GlusterFileSystem
 rm -rf target/
 rm -rf /mnt/glusterfs/*
 # runs in debug mode.
