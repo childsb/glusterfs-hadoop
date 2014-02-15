@@ -122,7 +122,8 @@ public class GlusterfsVolume extends FileSystem {
     }
 
     public String pathOnly(Path path){
-        return path.toUri().getPath();
+        
+        return makeQualified(path).toUri().getPath();
     }
 
     @Override
@@ -247,6 +248,7 @@ public class GlusterfsVolume extends FileSystem {
         if (!exists(f)) {
             throw new FileNotFoundException(f.toString());
         }
+        f = makeQualified(f);
         return new FSDataInputStream(new BufferedFSInputStream(new GlussterFileInputStream(f), bufferSize));
     }
 
@@ -295,6 +297,9 @@ public class GlusterfsVolume extends FileSystem {
 
     @Override
     public FSDataOutputStream append(Path f, int bufferSize, Progressable progress) throws IOException{
+        
+        f = makeQualified(f);
+        
         if (!exists(f)) {
             throw new FileNotFoundException("File " + f + " not found");
         }
@@ -306,10 +311,16 @@ public class GlusterfsVolume extends FileSystem {
 
     @Override
     public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, short replication, long blockSize, Progressable progress) throws IOException{
+        
+        f = makeQualified(f);
+        
         return create(f, overwrite, true, bufferSize, replication, blockSize, progress);
     }
 
     private FSDataOutputStream create(Path f, boolean overwrite, boolean createParent, int bufferSize, short replication, long blockSize, Progressable progress) throws IOException{
+        
+        f = makeQualified(f);
+        
         if (exists(f) && !overwrite) {
             throw new IOException("File already exists: " + f);
         }
@@ -322,6 +333,8 @@ public class GlusterfsVolume extends FileSystem {
     }
 
     public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, EnumSet<CreateFlag> flags, int bufferSize, short replication, long blockSize, Progressable progress) throws IOException{
+        f = makeQualified(f);
+        
         if (exists(f) && !flags.contains(CreateFlag.OVERWRITE)) {
             throw new IOException("File already exists: " + f);
         }
@@ -330,7 +343,7 @@ public class GlusterfsVolume extends FileSystem {
 
     @Override
     public FSDataOutputStream create(Path f, FsPermission permission, boolean overwrite, int bufferSize, short replication, long blockSize, Progressable progress) throws IOException{
-
+        f = makeQualified(f);
         FSDataOutputStream out = create(f, overwrite, bufferSize, replication, blockSize, progress);
         setPermission(f, permission);
         return out;
@@ -338,6 +351,7 @@ public class GlusterfsVolume extends FileSystem {
 
     @Override
     public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, boolean overwrite, int bufferSize, short replication, long blockSize, Progressable progress) throws IOException{
+        f = makeQualified(f);
         FSDataOutputStream out = create(f, overwrite, false, bufferSize, replication, blockSize, progress);
         setPermission(f, permission);
         return out;
@@ -363,12 +377,15 @@ public class GlusterfsVolume extends FileSystem {
      */
     @Override
     public boolean delete(Path p, boolean recursive) throws IOException{
+        p = makeQualified(p);
         GlusterFile file = vol.open(pathOnly(p));
         return file.delete(recursive);
     }
 
     @Override
     public FileStatus[] listStatus(Path f) throws IOException{
+        f = makeQualified(f);
+        
         GlusterFile localf = vol.open(pathOnly(f));
         FileStatus[] results;
 
@@ -407,6 +424,8 @@ public class GlusterfsVolume extends FileSystem {
      */
     @Override
     public boolean mkdirs(Path f) throws IOException{
+        f = makeQualified(f);
+        
         if (f == null) {
             throw new IllegalArgumentException("mkdirs path arg is null");
         }
@@ -464,6 +483,7 @@ public class GlusterfsVolume extends FileSystem {
 
     @Override
     public FsStatus getStatus(Path p) throws IOException{
+        p = makeQualified(p);
         // assume for now that we're only dealing with one volume.
         // GlusterFile partition = vol.open(pathOnly(p == null ? new Path("/") :
         // p));
@@ -489,11 +509,13 @@ public class GlusterfsVolume extends FileSystem {
 
     @Override
     public String toString(){
-        return "GlusterFs Volume:" + vol.getName();
+        return "GlusterFs Volume - glide:" + vol.getName();
     }
 
     @Override
     public FileStatus getFileStatus(Path f) throws IOException{
+        f = makeQualified(f);
+        
         GlusterFile file = vol.open(pathOnly(f));
 
         if (file.exists()) {
@@ -505,6 +527,7 @@ public class GlusterfsVolume extends FileSystem {
 
     @Override
     public void setOwner(Path p, String username, String groupname) throws IOException{
+        p = makeQualified(p);
         if (username == null && groupname == null) {
             throw new IOException("username == null && groupname == null");
         }
@@ -524,6 +547,7 @@ public class GlusterfsVolume extends FileSystem {
 
     @Override
     public void setPermission(Path p, FsPermission permission) throws IOException{
+        p = makeQualified(p);
         GlusterFile gf = vol.open(pathOnly(p));
         gf.chmod(permission.toShort());
     }
