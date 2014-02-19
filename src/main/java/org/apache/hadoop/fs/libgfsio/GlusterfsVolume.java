@@ -27,7 +27,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 
@@ -42,12 +41,10 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.FsStatus;
-import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.util.Progressable;
+import org.gluster.fs.GlusterBufferedInputStream;
 import org.gluster.fs.GlusterClient;
 import org.gluster.fs.GlusterFile;
 import org.gluster.fs.GlusterInputStream;
@@ -64,8 +61,11 @@ public class GlusterfsVolume extends FileSystem {
     public GlusterVolume vol;
     public GlusterClient client;
 
-    public GlusterfsVolume() {
+    public static void debug(String someText){
+        //org.apache.hadoop.fs.glusterfs.Util.logMachine(someText);
     }
+    
+    public GlusterfsVolume() {}
 
     public GlusterfsVolume(Configuration conf) {
         this.setConf(conf);
@@ -134,21 +134,23 @@ public class GlusterfsVolume extends FileSystem {
 
     class TrackingInputStreamWrapper extends InputStream {
 
-        GlusterInputStream ios = null;
+        InputStream ios = null;
         long bytesRead = 0;
 
-        public TrackingInputStreamWrapper(GlusterInputStream ios) throws IOException {
+        public TrackingInputStreamWrapper(InputStream ios) throws IOException {
             this.ios = ios;
         }
 
-        public GlusterInputStream getChannel(){
+        public InputStream getChannel(){
             return this.ios;
         }
 
         public int read() throws IOException{
+           
             int result = ios.read();
-            bytesRead += result;
             if (result != -1) {
+                bytesRead += result;
+
                 statistics.incrementBytesRead(1);
             }
             return result;
@@ -156,8 +158,8 @@ public class GlusterfsVolume extends FileSystem {
 
         public int read(byte[] data) throws IOException{
             int result = ios.read(data);
-            bytesRead += result;
             if (result != -1) {
+                bytesRead += result;
                 statistics.incrementBytesRead(result);
             }
             return result;
@@ -166,8 +168,9 @@ public class GlusterfsVolume extends FileSystem {
         @Override
         public int read(byte[] data, int offset, int length) throws IOException{
             int result = ios.read(data, offset, length);
-            bytesRead += result;
+          
             if (result != -1) {
+                bytesRead += result;
                 statistics.incrementBytesRead(result);
             }
             return result;
@@ -181,63 +184,80 @@ public class GlusterfsVolume extends FileSystem {
         private TrackingInputStreamWrapper fis;
         private long bytesReadThisStream = 0;
         private String fileName = null;
-
+        GlusterBufferedInputStream gis;
+        //GlusterInputStream gis;
+        
         public GlussterFileInputStream(Path f) throws IOException {
-            GlusterInputStream gis = vol.open(pathOnly(f)).inputStream();
+            //gis = vol.open(pathOnly(f)).inputStream();
+            gis = vol.open(pathOnly(f)).bufferedInputStream();
             fileName = f.toString();
             this.fis = new TrackingInputStreamWrapper(gis);
         }
 
         public void seek(long pos) throws IOException{
-            fis.getChannel().seek(new Long(pos).intValue());
-
-        }
+            debug(fileName + " seek(" + pos + ") currentOffset:" + getPos() );
+            gis.seek(pos);
+          }
 
         public long getPos() throws IOException{
-            return fis.getChannel().offset();
+            debug(fileName + " getPos() returned " + gis.offset() );
+            return gis.offset();
         }
 
         public boolean seekToNewSource(long targetPos) throws IOException{
-            this.seek(targetPos);
+            debug(fileName + " seekToNewSource( " + targetPos + ")" );
+            seek(targetPos);
             return true;
         }
 
         @Override
         public int available() throws IOException{
+            debug(fileName + " available()" );
             return fis.available();
         }
 
         @Override
         public void close() throws IOException{
+            debug(fileName + " close()" );
             fis.close();
         }
 
         @Override
         public boolean markSupported(){
-            return fis.getChannel().markSupported();
+            debug(fileName + " markSupported()" );
+            return gis.markSupported();
         }
 
         @Override
         public int read() throws IOException{
+            debug(fileName + " read()" );
             bytesReadThisStream++;
             return fis.read();
         }
 
         @Override
         public int read(byte[] b, int off, int len) throws IOException{
+            debug(fileName +  " read(byte[] b," +  off + "," + len + ")");
             int read = fis.read(b, off, len);
+            
+            if(read==-1){
+                debug("\t\t" + fileName +  " read(byte[] b," +  off + "," + len + ") ERROR RETURNED -1");
+            }
             bytesReadThisStream += read;
             return read;
         }
 
         @Override
         public int read(long position, byte[] b, int off, int len) throws IOException{
+            debug(fileName +  " read(" + position + " byte[] b," +  off + "," + len + ")");
+            seek(position);
             int read = fis.getChannel().read(b, off, len);
             return read;
         }
 
         @Override
         public long skip(long n) throws IOException{
+            debug(fileName + " skip( " + n + ")" );
             return fis.skip(n);
         }
 
