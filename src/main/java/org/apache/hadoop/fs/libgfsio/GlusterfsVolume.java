@@ -44,12 +44,14 @@ import org.apache.hadoop.fs.FsStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.util.Progressable;
-import org.gluster.fs.GlusterBufferedInputStream;
+import org.gluster.fs.GlusterDirectBufferInputStream;
 import org.gluster.fs.GlusterClient;
 import org.gluster.fs.GlusterFile;
 import org.gluster.fs.GlusterInputStream;
 import org.gluster.fs.GlusterOutputStream;
 import org.gluster.fs.GlusterVolume;
+import org.gluster.fs.IGlusterInputStream;
+import org.gluster.fs.IGlusterOutputStream;
 
 public class GlusterfsVolume extends FileSystem {
 
@@ -61,10 +63,6 @@ public class GlusterfsVolume extends FileSystem {
     public GlusterVolume vol;
     public GlusterClient client;
 
-    public static void debug(String someText){
-        //org.apache.hadoop.fs.glusterfs.Util.logMachine(someText);
-    }
-    
     public GlusterfsVolume() {}
 
     public GlusterfsVolume(Configuration conf) {
@@ -126,7 +124,7 @@ public class GlusterfsVolume extends FileSystem {
         return makeQualified(path).toUri().getPath();
     }
 
-    @Override
+    
     public void initialize(URI uri, Configuration conf) throws IOException{
         super.initialize(uri, conf);
         setConf(conf);
@@ -134,30 +132,28 @@ public class GlusterfsVolume extends FileSystem {
 
     class TrackingInputStreamWrapper extends InputStream {
 
-        InputStream ios = null;
+        IGlusterInputStream ios = null;
         long bytesRead = 0;
 
-        public TrackingInputStreamWrapper(InputStream ios) throws IOException {
+        public TrackingInputStreamWrapper(IGlusterInputStream ios) throws IOException {
             this.ios = ios;
         }
 
-        public InputStream getChannel(){
+        public IGlusterInputStream getChannel(){
             return this.ios;
         }
 
         public int read() throws IOException{
-           
             int result = ios.read();
             if (result != -1) {
                 bytesRead += result;
-
                 statistics.incrementBytesRead(1);
             }
             return result;
         }
 
         public int read(byte[] data) throws IOException{
-            int result = ios.read(data);
+            int result = ios.read(data,0,data.length);
             if (result != -1) {
                 bytesRead += result;
                 statistics.incrementBytesRead(result);
@@ -165,7 +161,6 @@ public class GlusterfsVolume extends FileSystem {
             return result;
         }
 
-        @Override
         public int read(byte[] data, int offset, int length) throws IOException{
             int result = ios.read(data, offset, length);
           
@@ -184,86 +179,62 @@ public class GlusterfsVolume extends FileSystem {
         private TrackingInputStreamWrapper fis;
         private long bytesReadThisStream = 0;
         private String fileName = null;
-        GlusterBufferedInputStream gis;
-        //GlusterInputStream gis;
+        IGlusterInputStream gis;
         
         public GlussterFileInputStream(Path f) throws IOException {
-            //gis = vol.open(pathOnly(f)).inputStream();
             gis = vol.open(pathOnly(f)).bufferedInputStream();
             fileName = f.toString();
             this.fis = new TrackingInputStreamWrapper(gis);
         }
 
         public void seek(long pos) throws IOException{
-            debug(fileName + " seek(" + pos + ") currentOffset:" + getPos() );
             gis.seek(pos);
-          }
+        }
 
         public long getPos() throws IOException{
-            debug(fileName + " getPos() returned " + gis.offset() );
             return gis.offset();
         }
 
         public boolean seekToNewSource(long targetPos) throws IOException{
-            debug(fileName + " seekToNewSource( " + targetPos + ")" );
             seek(targetPos);
             return true;
         }
 
-        @Override
         public int available() throws IOException{
-            debug(fileName + " available()" );
             return fis.available();
         }
 
-        @Override
         public void close() throws IOException{
-            debug(fileName + " close()" );
             fis.close();
         }
 
-        @Override
         public boolean markSupported(){
-            debug(fileName + " markSupported()" );
-            return gis.markSupported();
+            return ((InputStream) gis).markSupported();
         }
 
-        @Override
         public int read() throws IOException{
-            debug(fileName + " read()" );
             bytesReadThisStream++;
             return fis.read();
         }
 
-        @Override
         public int read(byte[] b, int off, int len) throws IOException{
-            debug(fileName +  " read(byte[] b," +  off + "," + len + ")");
             int read = fis.read(b, off, len);
-            
-            if(read==-1){
-                debug("\t\t" + fileName +  " read(byte[] b," +  off + "," + len + ") ERROR RETURNED -1");
-            }
             bytesReadThisStream += read;
             return read;
         }
 
-        @Override
         public int read(long position, byte[] b, int off, int len) throws IOException{
-            debug(fileName +  " read(" + position + " byte[] b," +  off + "," + len + ")");
             seek(position);
             int read = fis.getChannel().read(b, off, len);
             return read;
         }
 
-        @Override
         public long skip(long n) throws IOException{
-            debug(fileName + " skip( " + n + ")" );
             return fis.skip(n);
         }
 
     }
 
-    @Override
     public FSDataInputStream open(Path f, int bufferSize) throws IOException{
         if (!exists(f)) {
             throw new FileNotFoundException(f.toString());
@@ -276,7 +247,7 @@ public class GlusterfsVolume extends FileSystem {
      * For create()'s FSOutputStream.
      *********************************************************/
     class GlusterFileOutputStream extends OutputStream {
-        private GlusterOutputStream fos;
+        private IGlusterOutputStream fos;
 
         private GlusterFileOutputStream(Path f, boolean append) throws IOException {
             GlusterFile file = vol.open(pathOnly(f));
@@ -294,32 +265,25 @@ public class GlusterfsVolume extends FileSystem {
             }
         }
 
-        @Override
         public void close() throws IOException{
             fos.close();
         }
 
-        @Override
         public void flush() throws IOException{
             fos.flush();
         }
 
-        @Override
         public void write(byte[] b, int off, int len) throws IOException{
             fos.write(b, off, len);
         }
 
-        @Override
         public void write(int b) throws IOException{
             fos.write(b);
         }
     }
 
-    @Override
     public FSDataOutputStream append(Path f, int bufferSize, Progressable progress) throws IOException{
-        
         f = makeQualified(f);
-        
         if (!exists(f)) {
             throw new FileNotFoundException("File " + f + " not found");
         }
@@ -329,18 +293,13 @@ public class GlusterfsVolume extends FileSystem {
         return new FSDataOutputStream(new BufferedOutputStream(new GlusterFileOutputStream(f, true), bufferSize), statistics);
     }
 
-    @Override
     public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, short replication, long blockSize, Progressable progress) throws IOException{
-        
         f = makeQualified(f);
-        
         return create(f, overwrite, true, bufferSize, replication, blockSize, progress);
     }
 
     private FSDataOutputStream create(Path f, boolean overwrite, boolean createParent, int bufferSize, short replication, long blockSize, Progressable progress) throws IOException{
-        
         f = makeQualified(f);
-        
         if (exists(f) && !overwrite) {
             throw new IOException("File already exists: " + f);
         }
@@ -361,7 +320,6 @@ public class GlusterfsVolume extends FileSystem {
         return new FSDataOutputStream(new BufferedOutputStream(new GlusterFileOutputStream(f, false), bufferSize), statistics);
     }
 
-    @Override
     public FSDataOutputStream create(Path f, FsPermission permission, boolean overwrite, int bufferSize, short replication, long blockSize, Progressable progress) throws IOException{
         f = makeQualified(f);
         FSDataOutputStream out = create(f, overwrite, bufferSize, replication, blockSize, progress);
@@ -369,7 +327,6 @@ public class GlusterfsVolume extends FileSystem {
         return out;
     }
 
-    @Override
     public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, boolean overwrite, int bufferSize, short replication, long blockSize, Progressable progress) throws IOException{
         f = makeQualified(f);
         FSDataOutputStream out = create(f, overwrite, false, bufferSize, replication, blockSize, progress);
@@ -395,14 +352,12 @@ public class GlusterfsVolume extends FileSystem {
      * @throws IOException
      *             if p is non-empty and recursive is false
      */
-    @Override
     public boolean delete(Path p, boolean recursive) throws IOException{
         p = makeQualified(p);
         GlusterFile file = vol.open(pathOnly(p));
         return file.delete(recursive);
     }
 
-    @Override
     public FileStatus[] listStatus(Path f) throws IOException{
         f = makeQualified(f);
         
@@ -442,7 +397,7 @@ public class GlusterfsVolume extends FileSystem {
      * Creates the specified directory hierarchy. Does not treat existence as an
      * error.
      */
-    @Override
+   
     public boolean mkdirs(Path f) throws IOException{
         f = makeQualified(f);
         
