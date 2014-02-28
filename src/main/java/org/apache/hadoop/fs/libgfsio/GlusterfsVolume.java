@@ -31,6 +31,7 @@ import java.util.Arrays;
 import java.util.EnumSet;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.BufferedFSInputStream;
 import org.apache.hadoop.fs.CreateFlag;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -44,11 +45,8 @@ import org.apache.hadoop.fs.FsStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.util.Progressable;
-import org.gluster.fs.GlusterDirectBufferInputStream;
 import org.gluster.fs.GlusterClient;
 import org.gluster.fs.GlusterFile;
-import org.gluster.fs.GlusterInputStream;
-import org.gluster.fs.GlusterOutputStream;
 import org.gluster.fs.GlusterVolume;
 import org.gluster.fs.IGlusterInputStream;
 import org.gluster.fs.IGlusterOutputStream;
@@ -78,11 +76,13 @@ public class GlusterfsVolume extends FileSystem {
         }
     }
 
+    
     public URI getUri(){
         return NAME;
     }
 
     
+   
     public void setConf(Configuration conf){
 
         if (conf == null)
@@ -125,6 +125,7 @@ public class GlusterfsVolume extends FileSystem {
     }
 
     
+  
     public void initialize(URI uri, Configuration conf) throws IOException{
         super.initialize(uri, conf);
         setConf(conf);
@@ -143,6 +144,7 @@ public class GlusterfsVolume extends FileSystem {
             return this.ios;
         }
 
+        
         public int read() throws IOException{
             int result = ios.read();
             if (result != -1) {
@@ -152,6 +154,7 @@ public class GlusterfsVolume extends FileSystem {
             return result;
         }
 
+        
         public int read(byte[] data) throws IOException{
             int result = ios.read(data,0,data.length);
             if (result != -1) {
@@ -161,6 +164,7 @@ public class GlusterfsVolume extends FileSystem {
             return result;
         }
 
+        
         public int read(byte[] data, int offset, int length) throws IOException{
             int result = ios.read(data, offset, length);
           
@@ -187,54 +191,65 @@ public class GlusterfsVolume extends FileSystem {
             this.fis = new TrackingInputStreamWrapper(gis);
         }
 
+        
         public void seek(long pos) throws IOException{
             gis.seek(pos);
         }
 
+        
         public long getPos() throws IOException{
             return gis.offset();
         }
 
+        
         public boolean seekToNewSource(long targetPos) throws IOException{
             seek(targetPos);
             return true;
         }
 
+        
         public int available() throws IOException{
             return fis.available();
         }
 
+        
         public void close() throws IOException{
             fis.close();
         }
 
+        
         public boolean markSupported(){
             return ((InputStream) gis).markSupported();
         }
 
+        
         public int read() throws IOException{
             bytesReadThisStream++;
             return fis.read();
         }
 
+        
         public int read(byte[] b, int off, int len) throws IOException{
             int read = fis.read(b, off, len);
             bytesReadThisStream += read;
             return read;
         }
 
+        
         public int read(long position, byte[] b, int off, int len) throws IOException{
             seek(position);
             int read = fis.getChannel().read(b, off, len);
             return read;
         }
 
+        
         public long skip(long n) throws IOException{
             return fis.skip(n);
         }
 
     }
 
+    
     public FSDataInputStream open(Path f, int bufferSize) throws IOException{
         if (!exists(f)) {
             throw new FileNotFoundException(f.toString());
@@ -265,23 +280,35 @@ public class GlusterfsVolume extends FileSystem {
             }
         }
 
+        
         public void close() throws IOException{
             fos.close();
         }
 
+        
         public void flush() throws IOException{
             fos.flush();
         }
 
+        
         public void write(byte[] b, int off, int len) throws IOException{
             fos.write(b, off, len);
         }
 
+        
         public void write(int b) throws IOException{
             fos.write(b);
         }
     }
 
+    public BlockLocation[] getFileBlockLocations(FileStatus file,long start,long len) throws IOException{
+        GlusterFile f = vol.open(pathOnly(file.getPath()));
+        BlockLocation[] result=null;
+        GlusterfsXattr at = new GlusterfsXattr();
+        return at.getPathInfo(f, start, len);
+
+    }
+    
     public FSDataOutputStream append(Path f, int bufferSize, Progressable progress) throws IOException{
         f = makeQualified(f);
         if (!exists(f)) {
@@ -293,6 +320,7 @@ public class GlusterfsVolume extends FileSystem {
         return new FSDataOutputStream(new BufferedOutputStream(new GlusterFileOutputStream(f, true), bufferSize), statistics);
     }
 
+    
     public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, short replication, long blockSize, Progressable progress) throws IOException{
         f = makeQualified(f);
         return create(f, overwrite, true, bufferSize, replication, blockSize, progress);
@@ -311,6 +339,7 @@ public class GlusterfsVolume extends FileSystem {
         return new FSDataOutputStream(new BufferedOutputStream(new GlusterFileOutputStream(f, false), bufferSize), statistics);
     }
 
+    
     public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, EnumSet<CreateFlag> flags, int bufferSize, short replication, long blockSize, Progressable progress) throws IOException{
         f = makeQualified(f);
         
@@ -320,6 +349,7 @@ public class GlusterfsVolume extends FileSystem {
         return new FSDataOutputStream(new BufferedOutputStream(new GlusterFileOutputStream(f, false), bufferSize), statistics);
     }
 
+    
     public FSDataOutputStream create(Path f, FsPermission permission, boolean overwrite, int bufferSize, short replication, long blockSize, Progressable progress) throws IOException{
         f = makeQualified(f);
         FSDataOutputStream out = create(f, overwrite, bufferSize, replication, blockSize, progress);
@@ -327,6 +357,7 @@ public class GlusterfsVolume extends FileSystem {
         return out;
     }
 
+    
     public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, boolean overwrite, int bufferSize, short replication, long blockSize, Progressable progress) throws IOException{
         f = makeQualified(f);
         FSDataOutputStream out = create(f, overwrite, false, bufferSize, replication, blockSize, progress);
@@ -334,6 +365,7 @@ public class GlusterfsVolume extends FileSystem {
         return out;
     }
 
+    
     public boolean rename(Path src, Path dst) throws IOException{
          if (vol.open(pathOnly(src)).renameTo(vol.open(pathOnly(dst)))) {
             return true;
@@ -352,12 +384,14 @@ public class GlusterfsVolume extends FileSystem {
      * @throws IOException
      *             if p is non-empty and recursive is false
      */
+    
     public boolean delete(Path p, boolean recursive) throws IOException{
         p = makeQualified(p);
         GlusterFile file = vol.open(pathOnly(p));
         return file.delete(recursive);
     }
 
+    
     public FileStatus[] listStatus(Path f) throws IOException{
         f = makeQualified(f);
         
@@ -398,6 +432,7 @@ public class GlusterfsVolume extends FileSystem {
      * error.
      */
    
+    
     public boolean mkdirs(Path f) throws IOException{
         f = makeQualified(f);
         
@@ -415,7 +450,7 @@ public class GlusterfsVolume extends FileSystem {
         return (parent == null || mkdirs(parent)) && (p2f.mkdir() || p2f.isDirectory());
     }
 
-    @Override
+    
     public boolean mkdirs(Path f, FsPermission permission) throws IOException{
         boolean b = mkdirs(f);
         if (b) {
@@ -424,14 +459,14 @@ public class GlusterfsVolume extends FileSystem {
         return b;
     }
 
-    @Override
+    
     protected boolean primitiveMkdir(Path f, FsPermission absolutePermission) throws IOException{
         boolean b = mkdirs(f);
         setPermission(f, absolutePermission);
         return b;
     }
 
-    @Override
+    
     public Path getHomeDirectory(){
         return this.makeQualified(new Path(System.getProperty("user.home")));
     }
@@ -439,24 +474,24 @@ public class GlusterfsVolume extends FileSystem {
     /**
      * Set the working directory to the given directory.
      */
-    @Override
+    
     public void setWorkingDirectory(Path newDir){
         workingDir = makeAbsolute(newDir);
         checkPath(workingDir);
 
     }
 
-    @Override
+    
     public Path getWorkingDirectory(){
         return workingDir;
     }
 
-    @Override
+    
     protected Path getInitialWorkingDirectory(){
-        return new Path(this.NAME + "user/" + System.getProperty("user.name"));
+        return new Path(GlusterfsVolume.NAME + "user/" + System.getProperty("user.name"));
     }
 
-    @Override
+    
     public FsStatus getStatus(Path p) throws IOException{
         p = makeQualified(p);
         // assume for now that we're only dealing with one volume.
@@ -467,27 +502,27 @@ public class GlusterfsVolume extends FileSystem {
         return new GlusterFsStatus(vol);
     }
 
-    @Override
+    
     public Path startLocalOutput(Path fsOutputFile, Path tmpLocalFile) throws IOException{
         return fsOutputFile;
     }
 
     // It's in the right place - nothing to do.
-    @Override
+    
     public void completeLocalOutput(Path fsWorkingFile, Path tmpLocalFile) throws IOException{
     }
 
-    @Override
+    
     public void close() throws IOException{
         super.close();
     }
 
-    @Override
+    
     public String toString(){
         return "GlusterFs Volume - glide:" + vol.getName();
     }
 
-    @Override
+    
     public FileStatus getFileStatus(Path f) throws IOException{
         f = makeQualified(f);
         
@@ -500,7 +535,7 @@ public class GlusterfsVolume extends FileSystem {
         }
     }
 
-    @Override
+    
     public void setOwner(Path p, String username, String groupname) throws IOException{
         p = makeQualified(p);
         if (username == null && groupname == null) {
@@ -520,7 +555,7 @@ public class GlusterfsVolume extends FileSystem {
 
     }
 
-    @Override
+    
     public void setPermission(Path p, FsPermission permission) throws IOException{
         p = makeQualified(p);
         GlusterFile gf = vol.open(pathOnly(p));

@@ -17,7 +17,7 @@
  *
  */
 
-package org.apache.hadoop.fs.glusterfs;
+package org.apache.hadoop.fs.libgfsio;
 
 public class GlusterFSBrickRepl{
     private String[] replHost;
