@@ -1,5 +1,14 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	
+	<!--  required to deploy on sonatype OSS maven repo -->
+	<parent>
+	    <groupId>org.sonatype.oss</groupId>
+	    <artifactId>oss-parent</artifactId>
+	    <version>7</version>
+	</parent>
+  
+	
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.gluster</groupId>
 	<artifactId>glusterfs-hadoop</artifactId>
@@ -9,7 +18,37 @@
 	<version>2.3.5</version>
 	<name>glusterfs-hadoop</name>
 	<url>http://maven.apache.org</url>
-
+	<licenses>
+	    <license>
+	      <name>The Apache Software License, Version 2.0</name>
+	      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+	      <distribution>repo</distribution>
+	    </license>
+	  </licenses>
+    <scm>
+	    <connection>scm:git:git@github.com:gluster/glusterfs-hadoop.git</connection>
+	    <developerConnection>scm:git:git@github.com:gluster/glusterfs-hadoop.git</developerConnection>
+	    <url>https://github.com/gluster/glusterfs-hadoop.git</url>
+    </scm>
+	<developers>
+    <developer>
+      <id>childsb</id>
+      <name>bradley childs</name>
+      <email>bchidls@gmail.com</email>
+    </developer>
+    <developer>
+      <id>jayunit100</id>
+      <name>jay vyas</name>
+      <email>jayunit100@gmail.com</email>
+    </developer>
+    <developer>
+      <id>rootfs</id>
+      <name>huamin chen</name>
+      <email>hchen@redhat.com</email>
+    </developer>
+    
+    </developers>  
+    <!-- 
 	<distributionManagement>
 		<repository>
 			<id>maven-s3-release-repo</id>
@@ -17,7 +56,8 @@
 			<url>s3://rhbd/maven/repositories/internal</url>
 		</repository>
 	</distributionManagement>
-
+ -->
+ 
 	<dependencies>
 
 		<dependency>
@@ -79,7 +119,45 @@
 
 
 		<plugins>
+		<plugin>
+		  <groupId>org.apache.maven.plugins</groupId>
+		  <artifactId>maven-source-plugin</artifactId>
+		  <executions>
+		    <execution>
+		      <id>attach-sources</id>
+		      <goals>
+		        <goal>jar</goal>
+		      </goals>
+		    </execution>
+		  </executions>
+		</plugin>
+		<plugin>
+		  <groupId>org.apache.maven.plugins</groupId>
+		  <artifactId>maven-javadoc-plugin</artifactId>
+		  <executions>
+		    <execution>
+		      <id>attach-javadocs</id>
+		      <goals>
+		        <goal>jar</goal>
+		      </goals>
+		    </execution>
+		  </executions>
+		</plugin>
 
+			<plugin>
+			        <groupId>org.apache.maven.plugins</groupId>
+			        <artifactId>maven-gpg-plugin</artifactId>
+			        <version>1.5</version>
+			        <executions>
+			          <execution>
+			            <id>sign-artifacts</id>
+			            <phase>verify</phase>
+			            <goals>
+			              <goal>sign</goal>
+			            </goals>
+			          </execution>
+			        </executions>
+			 </plugin>
 
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
